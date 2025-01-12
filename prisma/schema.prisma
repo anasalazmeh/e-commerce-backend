@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  userId    Int    @id @default(autoincrement())
+  fullName      String
+  email       String   @unique
+  password String
+  phone String
+  roles  Roles @default(User)
+  createdAt DateTime @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relations
+  orders Orders[]  @relation("UsersToOrders")
+  cart Cart[]  @relation("UsersToCart")
+  productReview ProductReview[] @relation("UsersToProductReview")
+}
+enum Roles {
+  Admin    // قيد التجهيز
+  Employee  // مكتمل
+  User  // مُلغى
+}
+model Categories {
+  categoryId    Int    @id @default(autoincrement())
+  name        String  @unique
+  description        String
+  createdAt   DateTime   @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relation
+  Product     Products[]  @relation("CategoryToProduct")
+}
+model Products {
+  productId    Int    @id @default(autoincrement())
+  categoryId Int
+  name       String
+  description    String
+  price      Decimal
+  stock      Int
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relations
+  category   Categories    @relation("CategoryToProduct", fields: [categoryId], references: [categoryId])
+  orderDetails  OrderDetails[]
+  productReview ProductReview[]
+  cart Cart[]  @relation("ProductsToCart")
+  images     Images[]
+  @@index([categoryId])
+}
+model Orders {
+  orderId    Int    @id @default(autoincrement())
+  userId Int
+  totalAmount      Decimal
+  status      OrderStatus @default(PendingPayment)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relations
+  user   User    @relation("UsersToOrders", fields: [userId], references: [userId])
+  orderDetails  OrderDetails[] @relation("OrderToOrderDetails")
+  payments    Payments[] @relation("OrderToPayments")
+  @@index([userId])
+}
+enum OrderStatus {
+  PendingPayment   // تم طلب لكن لم يتم دفع
+  Paid                       // تم طلب ودُفع
+  Completed             // مكتمل
+  Cancelled              // مُلغى
+}
+model OrderDetails {
+  OrderDetailId    Int    @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  unitPrice  Decimal
+  createdAt   DateTime   @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relations
+  order     Orders   @relation("OrderToOrderDetails", fields: [orderId], references: [orderId])
+  product   Products @relation(fields: [productId], references: [productId])
+  @@index([orderId])
+  @@index([productId])
+}
+model Cart {
+  cartId    Int    @id @default(autoincrement())
+  userId   Int
+  productId Int  
+  quantity  Int
+
+  //Relations
+  user     User   @relation("UsersToCart", fields: [userId], references: [userId])
+  product   Products @relation("ProductsToCart",fields: [productId], references: [productId])
+  @@index([userId])
+  @@index([productId])
+}
+model Payments {
+  paymentsId    Int    @id @default(autoincrement())
+  orderId   Int
+  paymentMethod String   
+  amount        Decimal  
+  createdAt   DateTime   @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relation
+  order     Orders   @relation("OrderToPayments", fields: [orderId], references: [orderId])
+  @@index([orderId])
+}
+
+model ProductReview {
+  ReviewId         Int      @id @default(autoincrement()) 
+  productId  Int                                     
+  userId     Int                                   
+  rating     Int      @default(1)
+  comment    String?                                 
+  reviewDate DateTime @default(now())               
+
+  // Relations
+  product    Products  @relation(fields: [productId], references: [productId])
+  user       User     @relation("UsersToProductReview",fields: [userId], references: [userId])
+  @@index([productId])
+  @@index([userId])
+}
+
+model Images {
+  ImageId    Int    @id @default(autoincrement()) 
+  productId Int
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation
+  product   Products  @relation(fields: [productId], references: [productId], onDelete: Cascade)
+  @@index([productId])
+}
