@@ -46,6 +46,7 @@ CREATE TABLE `Orders` (
     `userId` INTEGER NOT NULL,
     `totalAmount` DECIMAL(65, 30) NOT NULL,
     `status` ENUM('PendingPayment', 'Paid', 'Completed', 'Cancelled') NOT NULL DEFAULT 'PendingPayment',
+    `address` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -89,6 +90,7 @@ CREATE TABLE `Payments` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
+    UNIQUE INDEX `Payments_orderId_key`(`orderId`),
     INDEX `Payments_orderId_idx`(`orderId`),
     PRIMARY KEY (`paymentsId`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

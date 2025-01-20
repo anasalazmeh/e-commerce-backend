@@ -66,13 +66,14 @@ model Orders {
   userId Int
   totalAmount      Decimal
   status      OrderStatus @default(PendingPayment)
+  address String?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
   // Relations
   user   User    @relation("UsersToOrders", fields: [userId], references: [userId])
   orderDetails  OrderDetails[] @relation("OrderToOrderDetails")
-  payments    Payments[] @relation("OrderToPayments")
+  payments   Payments? @relation("OrderToPayments")
   @@index([userId])
 }
 enum OrderStatus {
@@ -110,7 +111,7 @@ model Cart {
 }
 model Payments {
   paymentsId    Int    @id @default(autoincrement())
-  orderId   Int
+  orderId   Int @unique
   paymentMethod String   
   amount        Decimal  
   createdAt   DateTime   @default(now())

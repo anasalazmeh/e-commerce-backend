@@ -1,4 +1,4 @@
-import prisma from "@/prisma/client";
+import prisma, { checkDatabaseConnection } from "@/prisma/client";
 import { NextResponse } from "next/server";
 import { authenticateToken } from "../../_components/authenticateToken";
 
@@ -7,38 +7,45 @@ export async function GET(
   { params }: { params: { productId: string } }
 ) {
   try {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader)
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
       return NextResponse.json(
-        { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
       );
-
-    const userRole = authenticateToken(authHeader);
-    if (userRole === "Admin" || userRole === "Employee") {
-      const product = await prisma.products.findMany({
+    }
+    if (!isNaN(parseInt(params.productId)) && params.productId) {
+      const product = await prisma.products.findUnique({
         where: {
           productId: parseInt(params.productId),
+        },
+        include: {
+          images: true,
+          category: true,
+          productReview: {
+            include: {
+              user: true,
+            },
+          },
         },
       });
       if (!product)
         return NextResponse.json(
           { error: "Error", message: "The product does already exists" },
-          { status: 400 }
+          { status: 404 }
         );
-
       return NextResponse.json(
         { message: "Product get successfully", data: product },
         { status: 200 }
       );
     } else
-      return NextResponse.json(
-        { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "Wrong number id" }, { status: 400 });
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("GET:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 export async function PUT(
@@ -46,18 +53,25 @@ export async function PUT(
   { params }: { params: { productId: string } }
 ) {
   try {
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
     if (!authHeader) {
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     }
     const userRole = authenticateToken(authHeader);
     if (userRole === "Admin" || userRole === "Employee") {
       const body = await request.json();
-      const { categoryId, name, description, price, stock,images } = body;
-      if (!categoryId || !name || !description || !price || !stock ||!images)
+      const { categoryId, name, description, price, stock, images } = body;
+      if (!categoryId || !name || !description || !price || !stock || !images)
         return NextResponse.json(
           { error: "Error", message: "All fields are required" },
           { status: 400 }
@@ -70,24 +84,34 @@ export async function PUT(
       if (!existingProduct)
         return NextResponse.json(
           { error: "Error", message: "The product does already exists" },
-          { status: 400 }
+          { status: 404 }
         );
       await prisma.products.update({
         where: {
           productId: parseInt(params.productId),
         },
-        data:{
-          categoryId,
+        data: {
+          categoryId: parseInt(categoryId),
           name,
           description,
           price,
           stock,
           images: {
+            deleteMany: {},
+          },
+        },
+      });
+      await prisma.products.update({
+        where: {
+          productId: parseInt(params.productId),
+        },
+        data: {
+          images: {
             createMany: {
-              data: [...images.map((image: { url: string }) => image)],
+              data: images,
             },
           },
-        }
+        },
       });
       return NextResponse.json(
         { message: "Product update successfully" },
@@ -96,11 +120,14 @@ export async function PUT(
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("PUT:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 export async function DELETE(
@@ -108,11 +135,18 @@ export async function DELETE(
   { params }: { params: { productId: string } }
 ) {
   try {
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
     if (!authHeader) {
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     }
     const userRole = authenticateToken(authHeader);
@@ -125,7 +159,7 @@ export async function DELETE(
       if (!existingProduct)
         return NextResponse.json(
           { error: "Error", message: "The product does already exists" },
-          { status: 400 }
+          { status: 404 }
         );
       await prisma.products.delete({
         where: {
@@ -139,10 +173,13 @@ export async function DELETE(
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("DELETE:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

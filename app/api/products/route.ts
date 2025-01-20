@@ -1,80 +1,80 @@
-import prisma from "@/prisma/client";
+import prisma, { checkDatabaseConnection } from "@/prisma/client";
 import { NextResponse } from "next/server";
 import { authenticateToken } from "../_components/authenticateToken";
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader) {
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
       return NextResponse.json(
-        { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
       );
     }
-    const userRole = authenticateToken(authHeader);
-    if (userRole === "Admin" || userRole === "Employee") {
-      const products = await prisma.products.findMany();
-      if (!products) {
-        return NextResponse.json({
-          error: "error",
-          message: "don't have any products",
-        });
-      }
-      return NextResponse.json(
-        { message: "Get products successfully", data: products },
-        { status: 200 }
-      );
-    } else
-      return NextResponse.json(
-        { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
-      );
+    const products = await prisma.products.findMany({
+      include: {
+        category: true,
+        images: true,
+        productReview: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+    if (!products) {
+      return NextResponse.json({
+        error: "error",
+        message: "don't have any products",
+      });
+    }
+    return NextResponse.json(
+      { message: "Get products successfully", data: products },
+      { status: 200 }
+    );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("GET:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 export async function POST(request: Request) {
   try {
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
     if (!authHeader)
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
 
     const userRole = authenticateToken(authHeader);
     if (userRole === "Admin" || userRole === "Employee") {
       const body = await request.json();
-      const { categoryId, name, description, price, stock,images } = body;
-      if (!categoryId || !name || !description || !price || !stock ||!images)
+      const { categoryId, name, description, price, stock, images } = body;
+      if (!categoryId || !name || !description || !price || !stock)
         return NextResponse.json(
           { error: "Error", message: "All fields are required" },
           { status: 400 }
         );
-
-      // const existingCategory = await prisma.products.findUnique({
-      //   where: {
-      //     name,
-      //   },
-      // });
-
-      // if (existingCategory) {
-      //   return NextResponse.json(
-      //     { error: "Error", message: "category already exists" },
-      //     { status: 400 }
-      //   );
-      // }
       const product = await prisma.products.create({
         data: {
-          categoryId,
+          categoryId: parseInt(categoryId),
           name,
           description,
           price,
           stock,
           images: {
             createMany: {
-              data: [...images.map((image: { url: string }) => image)],
+              data: images.map((image: { url: string }) => ({
+                url: image.url,
+              })),
             },
           },
         },
@@ -92,10 +92,13 @@ export async function POST(request: Request) {
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("POST:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

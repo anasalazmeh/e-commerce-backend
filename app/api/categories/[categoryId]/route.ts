@@ -1,4 +1,4 @@
-import prisma from "@/prisma/client";
+import prisma, { checkDatabaseConnection } from "@/prisma/client";
 import { NextResponse } from "next/server";
 import { authenticateToken } from "../../_components/authenticateToken";
 
@@ -7,35 +7,28 @@ export async function GET(
   { params }: { params: { categoryId: string } }
 ) {
   try {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader)
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
       return NextResponse.json(
-        { error: "Error", message: "You must be login." },
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
+    const category = await prisma.categories.findUnique({
+      where: {
+        categoryId: parseInt(params.categoryId),
+      },
+    });
+    if (!category)
+      return NextResponse.json(
+        { error: "Error", message: "The category does already exists" },
         { status: 400 }
       );
 
-    const userRole = authenticateToken(authHeader);
-    if (userRole === "Admin" || userRole === "Employee") {
-      const category = await prisma.categories.findMany({
-        where: {
-          categoryId: parseInt(params.categoryId),
-        },
-      });
-      if (!category)
-        return NextResponse.json(
-          { error: "Error", message: "The category does already exists" },
-          { status: 400 }
-        );
-
-      return NextResponse.json(
-        { message: "Category get successfully", data: category },
-        { status: 200 }
-      );
-    } else
-      return NextResponse.json(
-        { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
-      );
+    return NextResponse.json(
+      { message: "Category get successfully", data: category },
+      { status: 200 }
+    );
   } catch (error) {
     console.log("Error:", error);
     return NextResponse.json({ error: "Interal error" }, { status: 500 });
@@ -46,11 +39,18 @@ export async function PUT(
   { params }: { params: { categoryId: string } }
 ) {
   try {
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     }
     const userRole = authenticateToken(authHeader);
@@ -76,10 +76,10 @@ export async function PUT(
         where: {
           categoryId: parseInt(params.categoryId),
         },
-        data:{
+        data: {
           name,
-          description
-        }
+          description,
+        },
       });
       return NextResponse.json(
         { message: "Category update successfully" },
@@ -88,7 +88,7 @@ export async function PUT(
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
     console.log("Error:", error);
@@ -100,16 +100,23 @@ export async function DELETE(
   { params }: { params: { categoryId: string } }
 ) {
   try {
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     }
     const userRole = authenticateToken(authHeader);
     if (userRole === "Admin" || userRole === "Employee") {
-      const existingCategory = await prisma.categories.findMany({
+      const existingCategory = await prisma.categories.findUnique({
         where: {
           categoryId: parseInt(params.categoryId),
         },
@@ -131,7 +138,7 @@ export async function DELETE(
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
     console.log("Error:", error);

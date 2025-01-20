@@ -1,4 +1,4 @@
-import prisma from "@/prisma/client";
+import prisma, { checkDatabaseConnection } from "@/prisma/client";
 import { NextResponse } from "next/server";
 import {
   authenticateToken,
@@ -10,11 +10,19 @@ export async function GET(
   { params }: { params: { cartId: string } }
 ) {
   try {
+    // Check database connection
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
-    if (!authHeader)
+    if (!authHeader || !authHeader.startsWith("Bearer "))
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     const userRole = authenticateToken(authHeader);
     if (userRole === "User") {
@@ -22,7 +30,7 @@ export async function GET(
       if (!userId)
         return NextResponse.json(
           { error: "Error", message: "You do not have the authority" },
-          { status: 400 }
+          { status: 403 }
         );
       const cart = await prisma.cart.findUnique({
         where: {
@@ -31,8 +39,11 @@ export async function GET(
       });
       if (!cart)
         return NextResponse.json(
-          { error: "Error", message: "The product does already exists in cart" },
-          { status: 400 }
+          {
+            error: "Error",
+            message: "The product does already exists in cart",
+          },
+          { status: 404 }
         );
       if (cart.userId === userId)
         return NextResponse.json(
@@ -42,16 +53,19 @@ export async function GET(
       else
         return NextResponse.json(
           { error: "Error", message: "You do not have the authority" },
-          { status: 400 }
+          { status: 403 }
         );
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("GET_CART:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 export async function PUT(
@@ -59,11 +73,19 @@ export async function PUT(
   { params }: { params: { cartId: string } }
 ) {
   try {
+    // Check database connection
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")){
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     }
     const userRole = authenticateToken(authHeader);
@@ -79,7 +101,7 @@ export async function PUT(
       if (!userId)
         return NextResponse.json(
           { error: "Error", message: "You do not have the authority" },
-          { status: 400 }
+          { status: 403 }
         );
       const existingCart = await prisma.cart.findUnique({
         where: {
@@ -88,8 +110,11 @@ export async function PUT(
       });
       if (!existingCart)
         return NextResponse.json(
-          { error: "Error", message: "The product does already exists in cart" },
-          { status: 400 }
+          {
+            error: "Error",
+            message: "The product does already exists in cart",
+          },
+          { status: 404 }
         );
       if (existingCart.userId === userId) {
         await prisma.cart.update({
@@ -108,16 +133,19 @@ export async function PUT(
       } else
         return NextResponse.json(
           { error: "Error", message: "You do not have the authority" },
-          { status: 400 }
+          { status: 403 }
         );
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("PUT_CART:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 export async function DELETE(
@@ -125,11 +153,19 @@ export async function DELETE(
   { params }: { params: { cartId: string } }
 ) {
   try {
+    // Check database connection
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get("Authorization");
     if (!authHeader) {
       return NextResponse.json(
         { error: "Error", message: "You must be login." },
-        { status: 400 }
+        { status: 403 }
       );
     }
     const userRole = authenticateToken(authHeader);
@@ -137,8 +173,8 @@ export async function DELETE(
       const userId = getUserId(authHeader);
       if (!userId)
         return NextResponse.json(
-          { error: "Error", message: "All fields are required" },
-          { status: 400 }
+          { error: "Error", message: "You do not have the authority" },
+          { status: 403 }
         );
       const existingcart = await prisma.cart.findUnique({
         where: {
@@ -147,8 +183,11 @@ export async function DELETE(
       });
       if (!existingcart)
         return NextResponse.json(
-          { error: "Error", message: "The product in cart does already exists" },
-          { status: 400 }
+          {
+            error: "Error",
+            message: "The product in cart does already exists",
+          },
+          { status: 404 }
         );
       if (existingcart.userId === userId) {
         await prisma.cart.delete({
@@ -163,15 +202,18 @@ export async function DELETE(
       } else
         return NextResponse.json(
           { error: "Error", message: "You do not have the authority" },
-          { status: 400 }
+          { status: 403 }
         );
     } else
       return NextResponse.json(
         { error: "Error", message: "You do not have the authority" },
-        { status: 400 }
+        { status: 403 }
       );
   } catch (error) {
-    console.log("Error:", error);
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+    console.log("DELETE_CART:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

@@ -1,18 +1,35 @@
 import bcrypt from "bcryptjs";
-import prisma from "@/prisma/client";
+import prisma, { checkDatabaseConnection } from "@/prisma/client";
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import _ from "lodash";
 
 export async function POST(request: Request) {
   try {
+    // Check database connection
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { message: "Internal Server Error. Please try again later." },
+        { status: 500 } // Internal Server Error
+      );
+    }
+
     const body = await request.json();
     const { email, password } = body;
-    if (!email || !password) {
+    if (!email) {
       return NextResponse.json(
-        { error: "Error", message: "All fields are required" },
+        { error: "Validation Error", message: "Email is required" },
         { status: 400 }
       );
     }
+    if (!password) {
+      return NextResponse.json(
+        { error: "Validation Error", message: "Password is required" },
+        { status: 400 }
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: {
         email,
@@ -21,33 +38,44 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json(
         { error: "Error", message: "Invalid email" },
-        { status: 400 }
+        { status: 401 }
       );
     }
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return NextResponse.json(
-        { error: "Error", message: "Invalid password" },
-        { status: 400 }
+        { message: "Invalid password" },
+        { status: 401 }
       );
     }
     if (user.roles === "User")
-      return NextResponse.json({
-        error: "Error",
-        message: "You cannot log in from this account.",
-      });
+      return NextResponse.json(
+        {
+          error: "Error",
+          message: "You cannot log in from this account.",
+        },
+        { status: 403 }
+      );
     else {
       const token = jwt.sign(
-        { userId: user.userId, email: user.email, role: user.roles },
+        { userId: user.userId, email: user.email, role: "Admin" },
         process.env.JWT_SECRET as string
       );
-      const { ...userWithoutPassword } = user;
+      const userWithoutPassword = _.omit(user, ["password"]);
       return NextResponse.json(
-        { token, user: userWithoutPassword },
-        { status: 201 }
+        {
+          message: "Login successfully completed",
+          token,
+          data: userWithoutPassword,
+        },
+        { status: 200 }
       );
     }
-  } catch {
-    return NextResponse.json({ error: "Interal error" }, { status: 500 });
+  } catch (error) {
+    console.error("Error during login:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

@@ -31,7 +31,7 @@ export async function checkOrder(orderId:number) {
     // التحقق من المنتجات والكميات
     for (const item of orderDetails) {
       const product = allProducts.find((p) => p.productId === item.productId);
-      if (!product || product.stock !== item.quantity) {
+      if (!product || product.stock < item.quantity) {
         console.error(
           `Product mismatch: ${!product ? 'Product not found' : 'Quantity mismatch'} for Product ID: ${item.productId}`
         );
